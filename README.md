@@ -2,4 +2,6 @@
 
 ## Start
 
-`example.env` 填写内容，然后改名为 `.env`
+- 新建 `.env` 将 `example.env` 的内容复制进去，并正确填写
+- `pip3 install -r requirements.txt`
+- `python3 main.py`
