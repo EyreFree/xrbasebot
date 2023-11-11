@@ -14,6 +14,9 @@ intents.guilds = True
 intents.members = True
 client = discord.Client(intents=intents)
 
+repo_owner_g = 'SwiftGGTeam'
+repo_name_g = 'swiftui-tutorial-chinese'
+
 def create_table():
     conn = sqlite3.connect('user_accounts.db')
     c = conn.cursor()
@@ -124,10 +127,6 @@ def get_assigned_issue_ids(issues, github_id):
     return sorted(assigned_issue_ids)
 
 def add_collaborator(repo_owner, repo_name, github_id):
-    return ''
-
-    # 下面的代码需求有点问题，待讨论，先留着
-
     # 替换为你的 GitHub token
     token = os.getenv('GH_TOKEN')
 
@@ -136,21 +135,68 @@ def add_collaborator(repo_owner, repo_name, github_id):
 
     # 设置请求头，包括身份验证 token
     headers = {
-        'Authorization': f'token {token}',
-        'Accept': 'application/vnd.github.v3+json',
-        'permission': 'triage',
+        'Authorization': 'Token ' + token,
+        'Accept': 'application/vnd.github.v3+json'
+    }
+
+    # 设置权限级别为 "read"，即只读权限
+    data = {
+        'permission': 'read'
     }
 
     # 发送 PUT 请求将用户添加为 Collaborator
-    response = requests.put(url, headers=headers)
-
-    return response.text
+    response = requests.put(url, headers=headers, json=data)
 
     # 检查响应状态码
     if response.status_code == 201:
-        return f"已将您添加为协作者，仓库权限邀请：https://github.com/{repo_owner}/{repo_name}/invitations/new?invitee={github_id}"
+        return f"您还不是项目协作者，已发送邀请，请接受后再尝试领取任务：https://github.com/{repo_owner}/{repo_name}/invitations"
     else:
-        return f"在添加您为仓库协作者时失败，请联系管理员，错误消息：{response.json()['message']}"
+        return f"在添加您为仓库协作者时失败，请联系管理员"
+
+def is_collaborator(repo_owner, repo_name, github_id):
+    user = repo_owner
+    repo = repo_name
+    collaborator = github_id
+    access_token = os.getenv('GH_TOKEN')
+
+    headers = {
+        'Authorization': 'Token ' + access_token,
+        'Accept': 'application/vnd.github.v3+json'
+    }
+
+    url = f'https://api.github.com/repos/{user}/{repo}/collaborators'
+
+    response = requests.get(url, headers=headers)
+
+    if response.status_code == 200:
+        collaborators = response.json()
+
+        # 检查指定的协作者是否在协作者列表中
+        is_collaborator = any(c['login'] == collaborator for c in collaborators)
+        
+        return is_collaborator
+    else:
+        return None
+
+def is_member(repo_owner, github_id):
+    username = github_id
+    org_name = repo_owner
+    access_token = os.getenv('GH_TOKEN')
+
+    # 发送GET请求获取组织成员列表
+    url = f"https://api.github.com/orgs/{org_name}/members"
+    headers = {'Authorization': f'token {access_token}'}
+    response = requests.get(url, headers=headers)
+
+    if response.status_code == 200:
+        members = [member['login'] for member in response.json()]
+
+        if username in members:
+            return True
+        else:
+            return False
+    else:
+        return None
         
 @client.event
 async def on_ready():
@@ -171,8 +217,8 @@ async def on_message(message):
     # 是否为私聊
     is_private_chat = isinstance(message.channel, discord.DMChannel)
 
-    if message.content.startswith('$'):
-        command = message.content[1:]  # 获取命令名，去除前缀 $
+    if message.content.startswith('/'):
+        command = message.content[1:]  # 获取命令名，去除前缀 /
 
         # info: 列出我的所有信息
         #   - GitHub 账号
@@ -180,11 +226,11 @@ async def on_message(message):
         if command == 'help':
             help_msg = [
                 '指令列表:',
-                '$info：列出我的所有账号信息',
-                '$bind [github_id]：绑定 GitHub 账号',
-                '$tasks：列出全部可领取的任务，Issue 序号即为任务 ID',
-                '$task [task_id]：查询任务详情，Issue 序号即为任务 ID',
-                '$claim [task_id]：领取某任务，Issue 序号即为任务 ID'
+                '/info：列出我的所有账号信息',
+                '/bind [github_id]：绑定 GitHub 账号',
+                '/tasks：列出全部可领取的任务，Issue 序号即为任务 ID',
+                '/task [task_id]：查询任务详情，Issue 序号即为任务 ID',
+                '/claim [task_id]：领取某任务，Issue 序号即为任务 ID'
             ]
             msg_return = "\n".join(map(str, help_msg))
             pass
@@ -193,7 +239,7 @@ async def on_message(message):
         #   - GitHub 账号
         #   - 已领取的任务(根据 GitHub)
         elif command == 'info':
-            # 处理 $info 命令
+            # 处理 /info 命令
             
             # 根据 discord_id 获取对应的 github_id
             discord_id = message.author.id
@@ -203,12 +249,16 @@ async def on_message(message):
                 info_msg = f'您绑定的 GitHub ID 是：{github_id}\n'
 
                 # 获取仓库的名称
-                repo_owner = 'SwiftGGTeam'
-                repo_name = 'the-swift-programming-language-in-chinese'
+                repo_owner = repo_owner_g
+                repo_name = repo_name_g
                 
+                # 构建请求头
+                access_token = os.getenv('GH_TOKEN')
+                headers = {'Authorization': f'token {access_token}'}
+
                 # 调用 GitHub API 获取仓库的所有 open issue
-                response = requests.get(f"https://api.github.com/repos/{repo_owner}/{repo_name}/issues?state=open")
-                
+                response = requests.get(f"https://api.github.com/repos/{repo_owner}/{repo_name}/issues?state=open", headers=headers)
+
                 # 检查 API 响应状态码
                 if response.status_code == 200:
                     issues = response.json()
@@ -229,7 +279,7 @@ async def on_message(message):
 
         # bind: 绑定 GitHub 账号
         elif command.startswith('bind'):
-            # 处理 $bind 命令
+            # 处理 /bind 命令
             
             # 使用空格将消息拆分成多个部分
             parts = message.content.split(' ')
@@ -245,13 +295,17 @@ async def on_message(message):
 
         # task: 查询所有 Open Issue
         elif command == 'tasks':
-            # 处理 $task 命令
+            # 处理 /task 命令
             # 获取仓库的名称
-            repo_owner = 'SwiftGGTeam'
-            repo_name = 'the-swift-programming-language-in-chinese'
+            repo_owner = repo_owner_g
+            repo_name = repo_name_g
             
+            # 构建请求头
+            access_token = os.getenv('GH_TOKEN')
+            headers = {'Authorization': f'token {access_token}'}
+
             # 调用 GitHub API 获取仓库的所有 open issue
-            response = requests.get(f"https://api.github.com/repos/{repo_owner}/{repo_name}/issues?state=open")
+            response = requests.get(f"https://api.github.com/repos/{repo_owner}/{repo_name}/issues?state=open", headers=headers)
             
             # 检查 API 响应状态码
             if response.status_code == 200:
@@ -264,7 +318,7 @@ async def on_message(message):
 
         # bind: 绑定 GitHub 账号
         elif command.startswith('task'):
-            # 处理 $bind 命令
+            # 处理 /bind 命令
             
             # 使用空格将消息拆分成多个部分
             parts = message.content.split(' ')
@@ -275,11 +329,15 @@ async def on_message(message):
                 issue_number = parts[1]  # 获取参数 github_id
 
                 # 获取仓库的名称
-                repo_owner = 'SwiftGGTeam'
-                repo_name = 'the-swift-programming-language-in-chinese'
+                repo_owner = repo_owner_g
+                repo_name = repo_name_g
                 
+                # 构建请求头
+                access_token = os.getenv('GH_TOKEN')
+                headers = {'Authorization': f'token {access_token}'}
+
                 # 调用 GitHub API 获取仓库的指定 issue
-                response = requests.get(f"https://api.github.com/repos/{repo_owner}/{repo_name}/issues/{issue_number}")
+                response = requests.get(f"https://api.github.com/repos/{repo_owner}/{repo_name}/issues/{issue_number}", headers=headers)
                 
                 # 检查 API 响应状态码
                 if response.status_code == 200:
@@ -295,7 +353,7 @@ async def on_message(message):
         #   - 单独给申请者发送通知消息，告知任务领取状态，如果领取成功发送仓库权限邀请消息，以及对应的 issue 链接。
         #   - 通知 issue 作者
         elif command.startswith('claim'):
-            # 处理 $claim 命令
+            # 处理 /claim 命令
 
             discord_id = message.author.id # 获取 discord_id
             github_id = get_github_id(discord_id)
@@ -311,12 +369,16 @@ async def on_message(message):
                     issue_id = parts[1]  # 获取参数 issue_id
                     
                     # 指定仓库信息
-                    repo_owner = 'SwiftGGTeam'
-                    repo_name = 'the-swift-programming-language-in-chinese'
+                    repo_owner = repo_owner_g
+                    repo_name = repo_name_g
                     issue_number = issue_id
 
+                    # 构建请求头
+                    access_token = os.getenv('GH_TOKEN')
+                    headers = {'Authorization': f'token {access_token}'}
+
                     # 调用 GitHub API 获取仓库的指定 issue
-                    response = requests.get(f"https://api.github.com/repos/{repo_owner}/{repo_name}/issues/{issue_number}")
+                    response = requests.get(f"https://api.github.com/repos/{repo_owner}/{repo_name}/issues/{issue_number}", headers=headers)
                     
                     # 检查 API 响应状态码
                     if response.status_code == 200:
@@ -334,52 +396,56 @@ async def on_message(message):
                         elif 'open' != issue_detail['state']:
                             msg_return = '这不是一个活跃任务'
                         else:
-                            # 指定 GitHub 用户登录名
-                            assignee_login = github_id
+                            if is_member(repo_owner_g, github_id) == True or is_collaborator(repo_owner, repo_name, github_id) == True:
+                                # 指定 GitHub 用户登录名
+                                assignee_login = github_id
 
-                            # 读取 GitHub 开发者 Token
-                            gh_token = os.getenv('GH_TOKEN')
+                                # 读取 GitHub 开发者 Token
+                                gh_token = os.getenv('GH_TOKEN')
 
-                            # 构建 API 请求 URL
-                            url = f'https://api.github.com/repos/{repo_owner}/{repo_name}/issues/{issue_number}/assignees'
+                                # 构建 API 请求 URL
+                                url = f'https://api.github.com/repos/{repo_owner}/{repo_name}/issues/{issue_number}/assignees'
 
-                            # 构建请求头
-                            headers = {
-                                'Accept': 'application/vnd.github.v3+json',
-                                'Authorization': f'token {gh_token}'
-                            }
+                                # 构建请求头
+                                headers = {
+                                    'Accept': 'application/vnd.github.v3+json',
+                                    'Authorization': f'token {gh_token}'
+                                }
 
-                            # 构建请求体
-                            data = {
-                                'assignees': [assignee_login]
-                            }
+                                # 构建请求体
+                                data = {
+                                    'assignees': [assignee_login]
+                                }
 
-                            # 发送请求
-                            response = requests.post(url, headers=headers, json=data)
+                                # 发送请求
+                                response = requests.post(url, headers=headers, json=data)
 
-                            # 检查请求是否成功
-                            if response.status_code == 201:
-                                msg_return = f'领取任务 {issue_number} 成功'
+                                # 检查请求是否成功
+                                if response.status_code == 201:
+                                    msg_return = f'领取任务 {issue_number} 成功'
 
-                                # 领取任务成功单独私信，获取要私信的用户
-                                target_user = client.get_user(discord_id)
-                                add_collaborator_result = add_collaborator(repo_owner, repo_name, github_id)
-                                pri_msg = f"任务链接：<https://github.com/{repo_owner}/{repo_name}/issues/{issue_number}>\n{add_collaborator_result}"
-                                if is_private_chat == False:
-                                    pri_msg = f'{msg_return}\n{pri_msg}'
-                                await target_user.send(pri_msg)
+                                    # 领取任务成功单独私信，获取要私信的用户
+                                    target_user = client.get_user(discord_id)
+                                    
+                                    pri_msg = f"任务链接：<https://github.com/{repo_owner}/{repo_name}/issues/{issue_number}>"
+                                    if is_private_chat == False:
+                                        pri_msg = f'{msg_return}\n{pri_msg}'
+                                    await target_user.send(pri_msg)
 
-                                # 领取任务成功单独私信，获取要私信的用户
-                                creator_github_id = issue_detail['user']['login']
-                                creator_discord_id = get_discord_id(creator_github_id)
-                                if creator_discord_id:
-                                    target_creator = client.get_user(creator_discord_id)
-                                    pri_creator_msg = f"您提交的 Issue 已被认领\n任务链接：<https://github.com/{repo_owner}/{repo_name}/issues/{issue_number}>"
-                                    await target_user.send(pri_creator_msg)
+                                    # 领取任务成功单独私信，获取要私信的用户
+                                    creator_github_id = issue_detail['user']['login']
+                                    creator_discord_id = get_discord_id(creator_github_id)
+                                    if creator_discord_id:
+                                        target_creator = client.get_user(creator_discord_id)
+                                        pri_creator_msg = f"您提交的 Issue 已被认领\n任务链接：<https://github.com/{repo_owner}/{repo_name}/issues/{issue_number}>"
+                                        await target_user.send(pri_creator_msg)
+                                    pass
+                                else:
+                                    msg_return = f"任务领取失败：{response.json()['message']}"
                                 pass
                             else:
-                                msg_return = f"任务领取失败：{response.json()['message']}"
-                            pass
+                                add_collaborator_result = add_collaborator(repo_owner, repo_name, github_id)
+                                msg_return = f"{add_collaborator_result}"
                         pass
                     else:
                         msg_return = f"获取任务详情失败：{response.json()['message']}"
@@ -391,7 +457,7 @@ async def on_message(message):
             pass
         else:
             # 如果命令不是这些预定义的命令
-            msg_return = '无效命令，请执行 $help 查看帮助'
+            msg_return = '无效命令，请执行 /help 查看帮助'
             pass
 
     if len(msg_return) != 0:
