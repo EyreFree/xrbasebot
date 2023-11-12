@@ -141,7 +141,7 @@ def add_collaborator(repo_owner, repo_name, github_id):
 
     # 设置权限级别为 "read"，即只读权限
     data = {
-        'permission': 'read'
+        'permission': 'write'
     }
 
     # 发送 PUT 请求将用户添加为 Collaborator
