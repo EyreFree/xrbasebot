@@ -136,3 +136,6 @@ dmypy.json
 
 # Outside scripts that are downloaded on startup
 cloc.pl
+
+# Custom
+user_accounts.db

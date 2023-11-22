@@ -28,6 +28,8 @@ def create_table():
     conn.close()
 
 def update_github_id(user_id, github_id):
+    github_id = github_id.lower()
+
     conn = sqlite3.connect('user_accounts.db')
     c = conn.cursor()
 
@@ -61,6 +63,8 @@ def get_github_id(user_id):
         return None
 
 def get_discord_id(github_id):
+    github_id = github_id.lower()
+
     conn = sqlite3.connect('user_accounts.db')
     c = conn.cursor()
 
@@ -116,6 +120,8 @@ def send_issue_detail(channel, issue):
         return msg
 
 def get_assigned_issue_ids(issues, github_id):
+    github_id = github_id.lower()
+
     assigned_issue_ids = []
     for issue in issues:
         if "/pull" not in issue['html_url']:
@@ -127,6 +133,8 @@ def get_assigned_issue_ids(issues, github_id):
     return sorted(assigned_issue_ids)
 
 def add_collaborator(repo_owner, repo_name, github_id):
+    github_id = github_id.lower()
+
     # 替换为你的 GitHub token
     token = os.getenv('GH_TOKEN')
 
@@ -154,6 +162,8 @@ def add_collaborator(repo_owner, repo_name, github_id):
         return f"在添加您为仓库协作者时失败，请联系管理员"
 
 def is_collaborator(repo_owner, repo_name, github_id):
+    github_id = github_id.lower()
+
     user = repo_owner
     repo = repo_name
     collaborator = github_id
@@ -179,6 +189,8 @@ def is_collaborator(repo_owner, repo_name, github_id):
         return None
 
 def is_member(repo_owner, github_id):
+    github_id = github_id.lower()
+
     username = github_id
     org_name = repo_owner
     access_token = os.getenv('GH_TOKEN')
@@ -189,7 +201,7 @@ def is_member(repo_owner, github_id):
     response = requests.get(url, headers=headers)
 
     if response.status_code == 200:
-        members = [member['login'] for member in response.json()]
+        members = [member['login'].lower() for member in response.json()]
 
         if username in members:
             return True
@@ -197,7 +209,7 @@ def is_member(repo_owner, github_id):
             return False
     else:
         return None
-        
+
 @client.event
 async def on_ready():
     create_table()
